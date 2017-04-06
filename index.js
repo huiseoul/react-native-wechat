@@ -1,7 +1,6 @@
 "use strict";
 
 import { DeviceEventEmitter, NativeModules } from 'react-native';
-import promisify from 'es6-promisify';
 import { EventEmitter } from 'events';
 
 let isAppRegistered = false;
@@ -29,13 +28,25 @@ function wrapRegisterApp(nativeFunc) {
   if (!nativeFunc) {
     return undefined;
   }
-  const promisified = promisify(nativeFunc, translateError);
   return (...args) => {
     if (isAppRegistered) {
       return Promise.reject(new Error('App is already registered.'));
     }
     isAppRegistered = true;
-    return promisified(...args);
+    return new Promise((resolve, reject) => {
+      nativeFunc.apply(null, [
+        ...args,
+        (error, result) => {
+          if (!error) {
+            return resolve(result);
+          }
+          if (typeof error === 'string') {
+            return reject(new Error(error));
+          }
+          reject(error);
+        },
+      ]);
+    });
   };
 }
 
@@ -43,12 +54,24 @@ function wrapApi(nativeFunc) {
   if (!nativeFunc) {
     return undefined;
   }
-  const promisified = promisify(nativeFunc, translateError);
   return (...args) => {
     if (!isAppRegistered) {
       return Promise.reject(new Error('registerApp required.'));
     }
-    return promisified(...args);
+    return new Promise((resolve, reject) => {
+      nativeFunc.apply(null, [
+        ...args,
+        (error, result) => {
+          if (!error) {
+            return resolve(result);
+          }
+          if (typeof error === 'string') {
+            return reject(new Error(error));
+          }
+          reject(error);
+        },
+      ]);
+    });
   };
 }
 
